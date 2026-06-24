@@ -22,83 +22,76 @@ include-in-header: ./assets/html/header.html
 ---
 
 
-```{r setup, echo=FALSE, results = 'asis', eval = TRUE}
+```{r setup, echo=FALSE, results='asis', eval=TRUE}
+
 library(tidyverse)
-library(kableExtra)  # For collapse_rows() to work
+library(kableExtra)
 library(tools)
 
-knitr::opts_chunk$set(echo = FALSE, message = FALSE)
+knitr::opts_chunk$set(
+  echo = FALSE,
+  message = FALSE,
+  warning = FALSE
+)
 
-# Example directories
 graphs_dir <- file.path(".", "results", "graphs")
 tables_dir <- file.path(".", "results", "tables")
-```
 
+orders_df <- read_csv("scripts/metro_orders.csv")
 
-# Market Segment Model
+# Metros where student-list purchase results should not be displayed
+# because the orders used additional filters that make interpretation misleading.
+# These metros should be treated as RQ0-only.
+skip_student_list_metros <- c("houston")
 
-### Market Segment Profile
-#### Connecticut Market 3: Fairfield County (simplified example)
+# ------------------------------------------------------------
+# Shared figure insertion helper
+# ------------------------------------------------------------
 
-```{r}
-market_segment <- data.frame(
-  activity = c('Total test takers','Avg SAT (verbal + math)','Avg # scores sent per test taker','Percent in top 20% of HS class','Percent aspiring to more than BA','Percent family income more than $35,000','Percent both parents with BA'),
-  local = c(550,770,2.8,27.8,30.6,11.2,9.0),
-  in_state = c(1199,850,3.5,26.1,41.5,20.6,16.3),
-  regional = c(1664,970,4.8,44.7,54.5,41.9,34.0),
-  national = c(3766,980,5.3,45.7,62.2,43.0,37.1)
-)
-
-kbl(
-  x = market_segment,
-  col.names = c('Characteristic','Local','In-state','Regional','National')
-)
-```
-
-
-### Institutional Profile
-#### Connecticut Market 3: Fairfield County (simplified example for anonymous institution)
-
-```{r}
-sample_inst <- data.frame(
-  characteristic = c('Total number of scores received','Pct of all test-takers in segment','lib_arts_num','lib_arts_share','engineering_num','engineering_share'),
-  local = c(1,0.2,0,0.0,0,0.0),
-  in_state = c(58,4.8,25,8.4,2,3.0),
-  regional= c(69,4.1,35,7.0,5,5.8),
-  national = c(109,2.9,61,5.3,3,0.8),
-  total = c(237,3.3,121,5.9,10,1.8)
-)
-
-kable(
-  x = sample_inst,
-  col.names = c('','Local','In-state','Regional','National','Total')
-)
-```
-
-
-# Results
-
-```{r results, echo=FALSE, results = 'asis', eval = TRUE}
-# Revised insert_figure() that does NOT print a heading
 insert_figure <- function(rq, metro, graph_type, base_path = graphs_dir) {
-
-  # We'll use 'metro' directly since it's already underscored (e.g. "los_angeles").
-  fig_file  <- file.path(base_path, rq, stringr::str_c(rq, "_", metro, "_", graph_type, ".png"))
-  cap_file  <- file.path(base_path, rq, stringr::str_c(rq, "_", metro, "_", graph_type, "_title.txt"))
-  note_file <- file.path(base_path, rq, stringr::str_c(rq, "_", metro, "_", graph_type, "_note.txt"))
-
-  # Print a heading/caption
-  caption_text <- if (file.exists(cap_file)) readLines(cap_file, warn = FALSE) else "No Title Found"
-  writeLines(paste0("#### ", caption_text))
-
-  # Output the figure (if it exists)
+  
+  fig_file <- file.path(
+    base_path,
+    rq,
+    stringr::str_c(rq, "_", metro, "_", graph_type, ".png")
+  )
+  
+  title_stub <- file.path(
+    base_path,
+    rq,
+    stringr::str_c(rq, "_", metro, "_", graph_type, "_title")
+  )
+  
+  cap_file_tex <- stringr::str_c(title_stub, ".tex")
+  cap_file_txt <- stringr::str_c(title_stub, ".txt")
+  
+  note_file <- file.path(
+    base_path,
+    rq,
+    stringr::str_c(rq, "_", metro, "_", graph_type, "_note.txt")
+  )
+  
+  if (file.exists(cap_file_tex)) {
+    
+    caption_text <- readLines(cap_file_tex, warn = FALSE)
+    writeLines(caption_text)
+    
+  } else if (file.exists(cap_file_txt)) {
+    
+    caption_text <- readLines(cap_file_txt, warn = FALSE)
+    writeLines(paste0("#### ", caption_text))
+    
+  } else {
+    
+    writeLines("#### No Title Found")
+  }
+  
   if (file.exists(fig_file)) {
     writeLines(stringr::str_c("![](", fig_file, ")\n"))
   } else {
     writeLines(paste("*(Missing figure file:", fig_file, ")*\n"))
   }
-
-  # Print footnotes (if the .txt file exists)
+  
   if (file.exists(note_file)) {
     notes_txt <- readLines(note_file, warn = FALSE)
     writeLines(
@@ -110,6 +103,162 @@ insert_figure <- function(rq, metro, graph_type, base_path = graphs_dir) {
     )
   }
 }
+
+# ------------------------------------------------------------
+# Shared heading helpers
+# ------------------------------------------------------------
+
+rq_slide_titles <- c(
+  rq0 = "RQ0: How unequal are Geomarkets?",
+  rq1 = "RQ1: What is the composition of each Geomarket?",
+  rq2 = "RQ2: Where does each group come from?",
+  rq3 = "RQ3: What happens when a Geomarket is excluded?"
+)
+
+make_rq_heading <- function(rq_title, rq, hide = FALSE) {
+  
+  if (hide) {
+    
+    stringr::str_c("### ", rq_title, " {.hide}")
+    
+  } else {
+    
+    rq_menu_title <- stringr::str_to_upper(rq)
+    
+    stringr::str_c(
+      "### ",
+      "<span class=\"menu-title\" style=\"display:none;\">&emsp;",
+      rq_menu_title,
+      "</span>",
+      "<span class=\"slide-title\">",
+      rq_title,
+      "</span>"
+    )
+  }
+}
+
+format_metro_heading <- function(metro) {
+  
+  if (metro == "dc_maryland_virginia") {
+    "D.C., Maryland, and Virginia"
+  } else if (metro == "bay_area") {
+    "Bay Area"
+  } else {
+    metro %>%
+      stringr::str_replace_all("_", " ") %>%
+      tools::toTitleCase() %>%
+      stringr::str_c(" area")
+  }
+}
+
+# ------------------------------------------------------------
+# Main-results settings
+# ------------------------------------------------------------
+
+main_results_metros <- c("chicago")
+main_results_include_rq0 <- TRUE
+
+main_results_layout <- if_else(
+  length(main_results_metros) == 1,
+  "by_rq",
+  "by_metro"
+)
+
+# Pick the middle score-band order for each main-results metro
+get_middle_order_id <- function(metro_name) {
+  
+  order_id <- orders_df %>%
+    filter(
+      metro == metro_name,
+      order_ids != "487927",
+      !metro %in% skip_student_list_metros
+    ) %>%
+    mutate(
+      score_low = readr::parse_number(test_range)
+    ) %>%
+    arrange(score_low) %>%
+    slice(ceiling(n() / 2)) %>%
+    pull(order_ids)
+  
+  if (length(order_id) != 1) {
+    stop("Expected exactly one middle-order ID for ", metro_name, ", but found ", length(order_id), ".")
+  }
+  
+  order_id
+}
+
+main_results_middle_orders <- tibble(
+  metro = main_results_metros,
+  middle_order_id = map_chr(main_results_metros, get_middle_order_id)
+)
+
+if (any(is.na(main_results_middle_orders$middle_order_id)) ||
+    any(main_results_middle_orders$middle_order_id == "")) {
+  stop("At least one main-results metro has no valid middle-order ID. Check main_results_metros and skip_student_list_metros.")
+}
+
+# ------------------------------------------------------------
+# Main-results figure manifest
+# ------------------------------------------------------------
+
+make_main_results_manifest <- function(metro_name) {
+  
+  middle_order_id <- main_results_middle_orders %>%
+    filter(metro == metro_name) %>%
+    pull(middle_order_id)
+  
+  rq0_rows <- tibble(
+    rq = "rq1",              # old RQ1 files, displayed as RQ0
+    displayed_rq = "rq0",
+    graph_type = c("race", "ses")
+  )
+  
+  rq1_rows <- tibble(
+    rq = c("rq2", "rq2", "rq2b"),
+    displayed_rq = "rq1",
+    graph_type = c(
+      "race_row_plot",
+      "firstgen_row_plot",
+      str_c("order_", middle_order_id, "_race_by_firstgen")
+    )
+  )
+  
+  rq2_rows <- tibble(
+    rq = "rq2",
+    displayed_rq = "rq2",
+    graph_type = c(
+      str_c("race_contribution_overlay_plot_", middle_order_id),
+      str_c("firstgen_contribution_overlay_plot_", middle_order_id),
+      str_c("race_firstgen_contribution_plot_", middle_order_id)
+    )
+  )
+  
+  rq3_rows <- tibble(
+    rq = "rq3",
+    displayed_rq = "rq3",
+    graph_type = c(
+      str_c("race_pp_exclusion_plot_order_", middle_order_id),
+      str_c("race_relative_exclusion_plot_order_", middle_order_id),
+      str_c("firstgen_pp_exclusion_plot_order_", middle_order_id),
+      str_c("firstgen_relative_exclusion_plot_order_", middle_order_id),
+      str_c("race_firstgen_pp_exclusion_plot_order_", middle_order_id),
+      str_c("race_firstgen_relative_exclusion_plot_order_", middle_order_id)
+    )
+  )
+  
+  bind_rows(
+    if (main_results_include_rq0) rq0_rows else NULL,
+    rq1_rows,
+    rq2_rows,
+    rq3_rows
+  ) %>%
+    mutate(metro = metro_name)
+}
+```
+
+# Results
+
+```{r appendix, echo=FALSE, results = 'asis', eval = TRUE}
 
 insert_rq1_table <- function(metro) {
   table_df <- readRDS(file.path(tables_dir, str_c('rq1_table_', metro, '.rds')))
@@ -198,11 +347,11 @@ insert_rq2_table <- function(metro, table_type, rq_name = 'rq2') {
           mutate(
             across(all, \(x) format(round(x, 0), big.mark = ',')),
             across(known, ~ if_else(table == 'col_pct_table' & eps_codename != 'All', sprintf('%.1f', .), format(round(., 0), big.mark = ','))),
-            across(no_col:not_first, ~ if_else(table == 'count_table' | (table == 'col_pct_table' & eps_codename == 'All'), format(round(., 0), big.mark = ','), sprintf('%.1f', .)))
+            across(first_gen:not_first, ~ if_else(table == 'count_table' | (table == 'col_pct_table' & eps_codename == 'All'), format(round(., 0), big.mark = ','), sprintf('%.1f', .)))
           ) %>%
           select(-unknown, -table, -order_ids, -test_range),
-        align = 'lrrrrr', escape = F,
-        col.names = c('', 'All', 'First-gen known', 'No college', 'Some college', 'Not first-gen')
+        align = 'lrrrr', escape = F,
+        col.names = c('', 'All', 'First-gen known', 'First-gen', 'Not first-gen')
       ) %>% 
         pack_rows(index = orders_group, colnum = 1, label_row_css = 'background-color: #eaeaea; padding: 10px 7.5px;') %>% 
         pack_rows(index = rep(tables_group, length(orders)), colnum = 1, label_row_css = '')
@@ -212,7 +361,7 @@ insert_rq2_table <- function(metro, table_type, rq_name = 'rq2') {
     table_df$eps_codename <- factor(table_df$eps_codename, levels = c(x[x != 'All'], 'All'))
     table_df <- table_df %>% arrange(order_ids, stu_race_cb, eps_codename)
     
-    group_df <- table_df %>% group_by(order_ids, stu_race_cb) %>% summarise(n = n())
+    group_df <- table_df %>% group_by(order_ids, stu_race_cb) %>% summarise(n = n(), .groups = "drop")
     race_group <- group_df$n
     names(race_group) <- str_replace(str_to_title(group_df$stu_race_cb), 'Or', 'or')
     
@@ -221,11 +370,11 @@ insert_rq2_table <- function(metro, table_type, rq_name = 'rq2') {
         table_df %>% 
           mutate(
             across(all, \(x) format(round(x, 0), big.mark = ',')),
-            across(row_no_col:row_not_first_gen, \(x) sprintf('%.1f', x))
+            across(c(row_first_gen, row_not_first_gen), \(x) sprintf('%.1f', x))
           ) %>% 
           select(-stu_race_cb, -order_ids, -test_range),
-        align = 'lrrrr', escape = F,
-        col.names = c('', 'All', 'No college', 'Some college', 'Not first-gen')
+        align = 'lrrr', escape = F,
+        col.names = c('', 'All', 'First-gen', 'Not first-gen')
       ) %>% 
         pack_rows(index = orders_group, colnum = 1, label_row_css = 'background-color: #eaeaea; padding: 10px 7.5px;') %>% 
         pack_rows(index = race_group, colnum = 1, label_row_css = '')
@@ -233,82 +382,128 @@ insert_rq2_table <- function(metro, table_type, rq_name = 'rq2') {
   }
 }
 
-# 2) Define your *underscored* metros / RQs
-  metros <- c(
-    "atlanta",
-    "bay_area",
-    "boston",
-    "chicago",
-    "cleveland",
-    "dallas",
-    "dc_maryland_virginia",
-    "detroit",
-    "houston",
-    "long_island",
-    "los_angeles",
-    "miami",
-    "new_york_city",
-    "northern_new_jersey",
-    "orange_county",
-    "philadelphia",
-    "san_diego"
-  )
 
-rqs <- c("rq1", "rq2")
+# All metros with RQ0 Census/Geomarket results
+all_metros <- c(
+  # "atlanta",
+  "bay_area",
+  # "boston",
+  "chicago",
+  # "cleveland",
+  "dallas",
+  # "dc_maryland_virginia",
+  "detroit",
+  # "houston",
+  "long_island",
+  "los_angeles",
+  # "miami",
+  # "new_york_city",
+  "northern_new_jersey",
+  "orange_county",
+  "philadelphia",
+  "san_diego"
+)
 
-# For RQ1, we have two plot types: "race" and "ses"
-graph_types_rq1 <- c("race", "ses")
+# Metros with student-list results for RQ1-RQ3,
+# excluding special AI/AN-only orders and excluding Houston.
+student_list_metros <- orders_df %>%
+  filter(order_ids != "487927") %>%
+  distinct(metro) %>%
+  pull(metro) %>%
+  setdiff(skip_student_list_metros)
 
-# For RQ2, we have two plot types: "race" and "firstgen"
-graph_types_rq2 <- c("race", "firstgen")
+# Metros with only RQ0 results.
+rq0_only_metros <- setdiff(all_metros, student_list_metros)
 
-# 3) Read the CSV (underscored metro column)
-orders_df <- read_csv("scripts/metro_orders.csv")
+# Final display order:
+# 1. metros with RQ1-RQ3 results, alphabetically
+# 2. metros with only RQ0 results, alphabetically
+metros <- c(
+  sort(student_list_metros),
+  sort(rq0_only_metros)
+)
 
-# Derive the RQ2 metros from the CSV
-rq2_metros <- unique(orders_df$metro)
+rqs <- c("rq0", "rq1", "rq2", "rq3")
+
+
+# Old RQ1 outputs, now displayed as RQ0
+graph_types_rq0 <- c("race", "ses")
+
+# Old RQ2 graph types, now split across displayed RQ1 and RQ2
+graph_types_rq_composition <- c("race", "firstgen")
+
+# RQ3 exclusion/delta graph types
+
+graph_types_rq3 <- c(
+  "race_pp",
+  "race_relative",
+  "firstgen_pp",
+  "firstgen_relative",
+  "race_firstgen_pp",
+  "race_firstgen_relative"
+)
+
+# Derive the old RQ2/new RQ1-RQ2 metros from the CSV
+rq2_metros <- orders_df %>%
+  distinct(metro) %>%
+  pull(metro) %>%
+  setdiff(skip_student_list_metros)
+
+# Derive the RQ3 metros from the CSV, excluding the special AI/AN order
+rq3_orders_df <- orders_df %>%
+  filter(order_ids != "487927") %>%
+  filter(!metro %in% skip_student_list_metros)
+
+rq3_metros <- unique(rq3_orders_df$metro)
 
 # 4) Main loop
 for (m in metros) {
 
   # Convert underscores -> spaces, then title case
   # But add special checks for "dc_maryland_virginia" and "bay_area"
-  if (m == "dc_maryland_virginia") {
-    heading_text <- "D.C., Maryland, and Virginia"
-  } else if (m == "bay_area") {
-    heading_text <- "Bay Area"
-  } else {
-    # Normal logic
-    heading_text <- gsub("_", " ", m, fixed = TRUE)
-    heading_text <- tools::toTitleCase(heading_text)
-    heading_text <- str_c(heading_text, " area")
-  }
+  heading_text <- format_metro_heading(m)
 
   # Print a top-level heading for the metro area
   writeLines(str_c("## ", heading_text))
 
   for (rq in rqs) {
     
-    # For clarity, parse out the numeric portion
-    rq_num <- str_replace(string = rq, pattern = "rq", replacement = "")
 
+    rq_title <- rq_slide_titles[[rq]]
+    
+    # Skip student-list analyses for selected metros.
+    # Keep RQ0 because it is based on Census/Geomarket data, not student-list purchases.
+    if (m %in% skip_student_list_metros & rq %in% c("rq1", "rq2", "rq3")) {
+      next
+    }    
+    
     # ---------------------------------------------
-    # RQ1 Logic
+    # RQ0 Logic: old RQ1
+    # Socioeconomic and racial variation between/within Geomarkets over time
     # ---------------------------------------------
-    if (rq == "rq1") {
+    if (rq == "rq0") {
 
-      # Each metro has 2 plots: "race" & "ses"
-      for (i in seq_along(graph_types_rq1)) {
-        g <- graph_types_rq1[i]
+      # Each metro has 2 old-rq1 plots: "race" & "ses"
+      for (i in seq_along(graph_types_rq0)) {
+        g <- graph_types_rq0[i]
 
-        # The first RQ1 slide for a metro has a real heading;
-        # subsequent ones are hidden slides (".hide")
-        writeLines(str_c("### Research question ", rq_num, if_else(i == 1, "", " {.hide}")))
-        insert_figure(rq = rq, metro = m, graph_type = g)
+        # The first RQ0 slide for a metro has a visible heading;
+        # subsequent ones are hidden slides.
+        writeLines(make_rq_heading(
+          rq_title = rq_title,
+          rq = rq,
+          hide = i != 1
+        ))
+        # Files still live in results/graphs/rq1/
+        insert_figure(
+          rq = "rq1",
+          metro = m,
+          graph_type = g
+        )
       }
       
-      # Add RQ1 table
-      writeLines(str_c("### Research question ", rq_num, " {.hide}"))
+      # Add old RQ1 table, displayed as RQ0
+      writeLines(str_c("### ", rq_title, " {.hide}"))
       writeLines(str_c("#### Racial/ethnic and socioeconomic characteristics of ", heading_text, " Geomarkets over time"))
       
       writeLines('<div class="table-wrapper freeze-pane">')
@@ -316,8 +511,8 @@ for (m in metros) {
       writeLines('</div>')
       writeLines('<div class="footnote">Table Notes:<br>- Race/ethnicity categories not available in 1980 Census: Asian, non-Hispanic; Two+ races, non-Hispanic; NHPI, non-Hispanic; AIAN non-Hispanic<br>- Household income measured using 2024 CPI</div>')
       
-      # Add RQ1 map
-      writeLines(str_c("### Research question ", rq_num, " {.hide}"))
+      # Add old RQ1 map, displayed as RQ0
+      writeLines(str_c("### ", rq_title, " {.hide}"))
       writeLines(str_c("#### Racial/ethnic and socioeconomic characteristics of ", heading_text, " Geomarkets over time"))
       
       rq1_map <- str_c('./results/maps/rq1_map_', m, '.html')
@@ -332,11 +527,22 @@ for (m in metros) {
       writeLines('<div class="footnote">Figure Notes:<br>- Race/ethnicity categories not available in 1980 Census: Asian, non-Hispanic; Two+ races, non-Hispanic; NHPI, non-Hispanic; AIAN non-Hispanic<br>- Household income measured using 2024 CPI</div>')
 
     # ---------------------------------------------
-    # RQ2 Logic (row vs. col approach + race_by_firstgen)
+    # RQ1 Logic: What is each Geomarket made of?
+    #
+    # Formal:
+    # To what extent do College Board Geomarkets partition academically similar
+    # prospects into racially and socioeconomically distinct pools within
+    # metropolitan areas?
+    #
+    # Uses:
+    # - old rq2 race row-percent graph
+    # - old rq2 firstgen row-percent graph
+    # - old rq2b race x firstgen graphs/table
+    # - old rq2 map
     # ---------------------------------------------
-    } else if (rq == "rq2") {
+    } else if (rq == "rq1") {
 
-      # Only run RQ2 code if the metro is in our RQ2 list
+      # Only run RQ1 code if the metro is in our student-list orders
       if (!(m %in% rq2_metros)) next
 
       # Filter orders_df to just rows for this underscored metro
@@ -345,89 +551,83 @@ for (m in metros) {
       # If none, skip
       if (nrow(df_metro) == 0) next
 
-      # Gather all the underscore-delimited order_ids
+      # Gather regular/non-AI/AN order IDs
       orders_for_m <- df_metro$order_ids
-      
-      # -- HERE is the new line to remove "487927" --
-      orders_for_m <- orders_for_m[ orders_for_m != "487927" ]  
-      
+      orders_for_m <- orders_for_m[orders_for_m != "487927"]
+
       get_notes <- function(missing_txt = '') {
         str_replace(
-          str_c('<div class="footnote">', paste0(readLines(file.path(graphs_dir, rq, str_c('rq2_', m, '_race_row_plot_note.txt')), warn = FALSE), collapse = "</br>"), '</div>'),
-          'Excludes students with missing values for race\\. ', missing_txt
+          str_c(
+            '<div class="footnote">',
+            paste0(
+              readLines(
+                file.path(graphs_dir, "rq2", str_c('rq2_', m, '_race_row_plot_note.txt')),
+                warn = FALSE
+              ),
+              collapse = "</br>"
+            ),
+            '</div>'
+          ),
+          'Excludes students with missing values for race\\. ',
+          missing_txt
         )
       }
 
-      # We'll do 2 group types: race & firstgen
-      for (i in seq_along(graph_types_rq2)) {
-        g <- graph_types_rq2[i]
+      first_rq1_slide <- TRUE
 
-        # We'll do row and col for each group type
-        for (rc in c("row", "col")) {
+      # -------------------------------------------------------
+      # RQ1A: Within each Geomarket, row percent by race
+      #      and row percent by first-gen status
+      # -------------------------------------------------------
+      for (g in graph_types_rq_composition) {
 
-          if (rc == "row") {
-            #
-            # ROW => single combined figure on one slide
-            #
-            writeLines(str_c("### Research question ", rq_num, if_else(i == 1, "", " {.hide}")))
-            graph_type_row <- str_c(g, "_", rc, "_plot")
-            insert_figure(rq = rq, metro = m, graph_type = graph_type_row)
-
-          } else {
-            #
-            # COL => separate file(s) by order ID => each on its own slide
-            #
-            for (order_id in orders_for_m) {
-              
-              # Each order ID gets its own "###" => new Reveal.js slide
-              writeLines(str_c("### Research question ", rq_num, " {.hide}"))
-              
-              graph_type_col <- str_c(g, "_", rc, "_plot_", order_id)
-              insert_figure(rq = rq, metro = m, graph_type = graph_type_col)
-            }
-            
-          } # end if (row vs col)
-
-        } # end rc loop
-        
-        # Add RQ2 table
-        writeLines(str_c("### Research question ", rq_num, " {.hide}"))
-        writeLines(if_else(
-          g == 'race',
-          str_c('#### Racial/ethnic composition of purchased student profiles by Geomarket, ', heading_text),
-          str_c('#### First-generation status of purchased student profiles by Geomarket, ', heading_text)
+        writeLines(make_rq_heading(
+          rq_title = rq_title,
+          rq = rq,
+          hide = !first_rq1_slide
         ))
+        graph_type_row <- str_c(g, "_row_plot")
 
-        writeLines('<div class="table-wrapper freeze-pane">')
-        writeLines(insert_rq2_table(m, g))
-        writeLines('</div>')
-        writeLines(get_notes())
-        
-      } # end g loop
+        # Files still live in results/graphs/rq2/
+        insert_figure(
+          rq = "rq2",
+          metro = m,
+          graph_type = graph_type_row
+        )
 
-      # -------------------------------------------
-      # ADDITIONAL: "race_by_firstgen" => goes to RQ2B
-      # -------------------------------------------
-      for (order_id in orders_for_m) {
-        writeLines(str_c("### Research question ", rq_num, " {.hide}"))
-        # e.g. "rq2b_los_angeles_order_448375_546954_race_by_firstgen.png"
-        graph_type_rbf <- str_c("order_", order_id, "_race_by_firstgen")
-        insert_figure(rq = "rq2b", metro = m, graph_type = graph_type_rbf)
+        first_rq1_slide <- FALSE
       }
-      
-      # Add RQ2B table
-      writeLines(str_c("### Research question ", rq_num, " {.hide}"))
+
+      # -------------------------------------------------------
+      # RQ1B: Within each Geomarket, race x first-gen composition
+      # -------------------------------------------------------
+      for (order_id in orders_for_m) {
+
+        writeLines(str_c("### ", rq_title, " {.hide}"))
+
+        graph_type_rbf <- str_c("order_", order_id, "_race_by_firstgen")
+
+        # Files live in results/graphs/rq2b/
+        insert_figure(
+          rq = "rq2b",
+          metro = m,
+          graph_type = graph_type_rbf
+        )
+      }
+
+      # Add race x first-gen table, displayed as part of new RQ1
+      writeLines(str_c("### ", rq_title, " {.hide}"))
       writeLines(str_c("#### First-generation status by race for ", heading_text, " Geomarkets"))
 
       writeLines('<div class="table-wrapper freeze-pane">')
       writeLines(insert_rq2_table(m, 'race_firstgen'))
       writeLines('</div>')
       writeLines(get_notes('Excludes students who have missing values for race or parental education. '))
-      
-      # Add RQ2 map
-      writeLines(str_c("### Research question ", rq_num, " {.hide}"))
+
+      # Add old RQ2 map, displayed as part of new RQ1
+      writeLines(str_c("### ", rq_title, " {.hide}"))
       writeLines(str_c("#### Purchased student profiles by racial/ethnic composition and first-generation status, ", heading_text))
-      
+
       writeLines(str_c(
         '<iframe data-src="./results/maps/rq2_map_',
         m,
@@ -436,14 +636,163 @@ for (m in metros) {
       writeLines('<p class="fullscreen">Fullscreen</p>')
       writeLines(get_notes())
 
-    } # end if (rq == "rq2")
+    # ---------------------------------------------
+    # RQ2 Logic: Which Geomarkets contribute disproportionately?
+    #
+    # Formal:
+    # Which Geomarkets contribute disproportionately to the availability of
+    # racially minoritized and first-generation prospects?
+    #
+    # Uses:
+    # - new rq2 race contribution overlay graphs
+    # - new rq2 firstgen contribution overlay graphs
+    # - new rq2 race x firstgen contribution graphs
+    # ---------------------------------------------
+    } else if (rq == "rq2") {
 
+      # Only run RQ2 code if the metro is in our student-list orders
+      if (!(m %in% rq2_metros)) next
+
+      # Filter orders_df to just rows for this underscored metro
+      df_metro <- filter(orders_df, metro == m)
+
+      # If none, skip
+      if (nrow(df_metro) == 0) next
+
+      # Gather regular/non-AI/AN order IDs
+      orders_for_m <- df_metro$order_ids
+      orders_for_m <- orders_for_m[orders_for_m != "487927"]
+
+      first_rq2_slide <- TRUE
+
+      # -------------------------------------------------------
+      # RQ2A: Race contribution overlay plots
+      # -------------------------------------------------------
+
+      for (order_id in orders_for_m) {
+
+        writeLines(make_rq_heading(
+          rq_title = rq_title,
+          rq = rq,
+          hide = !first_rq2_slide
+        ))
+        
+        graph_type_race_overlay <- str_c(
+          "race_contribution_overlay_plot_",
+          order_id
+        )
+
+        insert_figure(
+          rq = "rq2",
+          metro = m,
+          graph_type = graph_type_race_overlay
+        )
+
+        first_rq2_slide <- FALSE
+      }
+
+      # -------------------------------------------------------
+      # RQ2B: First-gen contribution overlay plots
+      # -------------------------------------------------------
+
+      for (order_id in orders_for_m) {
+
+        writeLines(str_c(
+          "### ",
+          rq_title,
+          " {.hide}"
+        ))
+
+        graph_type_firstgen_overlay <- str_c(
+          "firstgen_contribution_overlay_plot_",
+          order_id
+        )
+
+        insert_figure(
+          rq = "rq2",
+          metro = m,
+          graph_type = graph_type_firstgen_overlay
+        )
+      }
+
+      # -------------------------------------------------------
+      # RQ2C: Race x first-gen contribution plots
+      # -------------------------------------------------------
+
+      for (order_id in orders_for_m) {
+
+        writeLines(str_c(
+          "### ",
+          rq_title,
+          " {.hide}"
+        ))
+
+        graph_type_rfgen_contrib <- str_c(
+          "race_firstgen_contribution_plot_",
+          order_id
+        )
+
+        insert_figure(
+          rq = "rq2",
+          metro = m,
+          graph_type = graph_type_rfgen_contrib
+        )
+      }    # ---------------------------------------------
+      
+    # RQ3 Logic: What happens when a Geomarket is excluded?
+    #
+    # Formal:
+    # How does excluding particular Geomarkets change the composition of the
+    # prospect pool made visible to colleges?
+    # ---------------------------------------------
+    } else if (rq == "rq3") {
+
+      # Only run RQ3 code if the metro has RQ3 order groups
+      if (!(m %in% rq3_metros)) next
+
+      # Filter to regular/non-AI/AN order groups for this metro
+      df_metro_rq3 <- rq3_orders_df %>%
+        filter(metro == m)
+
+      # If none, skip
+      if (nrow(df_metro_rq3) == 0) next
+
+      # Gather regular order IDs for this metro
+      orders_for_m_rq3 <- df_metro_rq3$order_ids
+
+      first_rq3_slide <- TRUE
+
+      for (g in graph_types_rq3) {
+
+        for (order_id in orders_for_m_rq3) {
+
+          writeLines(make_rq_heading(
+            rq_title = rq_title,
+            rq = rq,
+            hide = !first_rq3_slide
+          ))
+          
+          graph_type_rq3 <- str_c(
+            g,
+            "_exclusion_plot_order_",
+            order_id
+          )
+
+          insert_figure(
+            rq = "rq3",
+            metro = m,
+            graph_type = graph_type_rq3
+          )
+
+          first_rq3_slide <- FALSE
+        }
+      }
+
+    } # end if/else rq logic
+        
   } # end rq loop
 
 } # end metros loop
-```
-
-```{r, eval=F}
 # A special version insert_figure_aian for AI/AN that does NOT print a heading
 insert_figure_aian <- function(rq, metro, graph_type, base_path = graphs_dir) {
   
@@ -471,92 +820,5 @@ insert_figure_aian <- function(rq, metro, graph_type, base_path = graphs_dir) {
       )
     )
   }
-}
-
-
-############################################################################
-# 5) AI/AN results loop
-############################################################################
-
-# (Level-1) "AI/AN students"
-writeLines("# AI/AN students\n")
-
-# The five metros (with 'nyny' last) and the single Native American order
-native_metros <- c("chicago", "dallas", "houston", "los_angeles", "nyny")
-native_order  <- "487927"
-
-# We want exactly 3 slides per metro, in this order:
-var_rc_pairs <- list(
-  c("firstgen", "row"),
-  c("firstgen", "col"),
-  c("race",     "row")
-)
-
-for (m in native_metros) {
-  
-  # (Level-2) heading for each metro (not a slide at slide-level=3)
-  heading_text <- if (m == "nyny") {
-    "New York City"
-  } else {
-    m_no_underscores <- gsub("_", " ", m, fixed = TRUE)
-    m_title          <- tools::toTitleCase(m_no_underscores)
-    paste0(m_title, " area")
-  }
-  writeLines(paste0("## ", heading_text, "\n"))
-
-  # For each var/rc pair, create a new slide at level-3 (always hidden in TOC)
-  for (i in seq_along(var_rc_pairs)) {
-    
-    g  <- var_rc_pairs[[i]][1]
-    rc <- var_rc_pairs[[i]][2]
-
-    # Always hidden from TOC => add "{.hide}" every time
-    writeLines(paste0("### ", heading_text, " (AI/AN) {.hide}\n"))
-
-    # (Level-4) subtitle on the same slide
-    subtitle <- if (g == "firstgen") {
-      "First-generation status composition of purchased AI/AN student profiles by geomarket"
-    } else if (g == "race") {
-      "Racial composition of purchased AI/AN student profiles by geomarket"
-    } else {
-      "Other composition of purchased AI/AN student profiles"
-    }
-    writeLines(paste0("#### ", subtitle, "\n"))
-
-    # Build figure name and call your "no-heading" figure function
-    graph_type <- paste0(g, "_", rc, "_plot_", native_order)
-    insert_figure_aian(
-      rq         = "rq2",
-      metro      = m,
-      graph_type = graph_type
-    )
-    
-    # Add RQ2 table
-    if ((g == 'firstgen' && rc == 'col') | (g == 'race' && rc == 'row')) {
-      writeLines(paste0("### ", heading_text, " (AI/AN) {.hide}\n"))
-      writeLines(if_else(
-        g == 'race',
-        str_c('#### Racial/ethnic composition of purchased student profiles by Geomarket, ', heading_text),
-        str_c('#### First-generation status of purchased student profiles by Geomarket, ', heading_text)
-      ))
-
-      writeLines('<div class="table-wrapper freeze-pane">')
-      writeLines(insert_rq2_table(m, g, 'rq2_aian'))
-      writeLines('</div>')
-      writeLines('<div class="footnote">Figure Notes:<br>- Order number 487927 (ordered 7/19/2019): HS class 2020 OR 2021; Ethnicity/Race = American Indian or Alaska Native; SAT 1040-1600; GPA B- to A+.</div>')
-    }
-  }
-  
-  # Add RQ2 map
-  writeLines(paste0("### ", heading_text, " (AI/AN) {.hide}\n"))
-  writeLines(str_c("#### Purchased AI/AN student profiles by racial/ethnic composition and first-generation status"))
-  
-  writeLines(str_c(
-    '<iframe data-src="./results/maps/rq2_aian_map_',
-    m,
-    '.html" src="about:blank" width=100% height=100% allowtransparency="true"></iframe>'
-  ))
-  writeLines('<p class="fullscreen">Fullscreen</p>')
-  writeLines('<div class="footnote">Figure Notes:<br>- Order number 487927 (ordered 7/19/2019): HS class 2020 OR 2021; Ethnicity/Race = American Indian or Alaska Native; SAT 1040-1600; GPA B- to A+.</div>')
 }
 ```
