@@ -1,6 +1,6 @@
 ---
-title: 'Structuring College Access'
-subtitle: 'The Market Segment Model and College Board Geomarkets'
+title: 'Making Exclusion Actionable'
+subtitle: 'Geographic Market Devices for Identifying Prospective College Students'
 author: ['Online Appendix']
 format:
   revealjs:
